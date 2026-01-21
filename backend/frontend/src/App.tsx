@@ -670,6 +670,31 @@ function App() {
                         >
                           <polygon points="0 0, 10 3, 0 6" fill="#D1D5DB" />
                         </marker>
+                        <marker
+                          id="arrowhead-active"
+                          markerWidth="10"
+                          markerHeight="10"
+                          refX="9"
+                          refY="3"
+                          orient="auto"
+                        >
+                          <polygon points="0 0, 10 3, 0 6" fill="#6366F1" />
+                        </marker>
+                        <linearGradient id="link-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                          <stop offset="0%" stopColor="#6366F1" stopOpacity="0.2" />
+                          <stop offset="100%" stopColor="#818CF8" stopOpacity="1" />
+                        </linearGradient>
+                        <filter id="glow-effect" x="-50%" y="-50%" width="200%" height="200%">
+                          <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                          <feMerge>
+                            <feMergeNode in="coloredBlur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                        <linearGradient id="node-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#FFFFFF" />
+                          <stop offset="100%" stopColor="#F3F4F6" />
+                        </linearGradient>
                       </defs>
 
                       {/* Draw edges */}
@@ -681,15 +706,31 @@ function App() {
                             if (!from || !to) return null
                             const isActive = selectedTaskId === task.id || selectedTaskId === depId
                             return (
-                              <path
-                                key={`${task.id}-${depId}`}
-                                d={`M${from.x} ${from.y} L${to.x} ${to.y}`}
-                                stroke={isActive ? '#6366F1' : '#E5E7EB'}
-                                strokeWidth={isActive ? 3 : 2}
-                                fill="none"
-                                markerEnd="url(#arrowhead)"
-                                className="transition-all duration-200"
-                              />
+                              <g key={`${task.id}-${depId}`}>
+                                {/* Base Path */}
+                                <path
+                                  d={`M${from.x} ${from.y} L${to.x} ${to.y}`}
+                                  stroke={isActive ? '#E0E7FF' : '#E5E7EB'}
+                                  strokeWidth={2}
+                                  fill="none"
+                                  markerEnd={isActive ? undefined : "url(#arrowhead)"}
+                                  className="transition-all duration-200"
+                                />
+                                {/* Active/Premium Animated Path */}
+                                <path
+                                  d={`M${from.x} ${from.y} L${to.x} ${to.y}`}
+                                  stroke={isActive ? '#6366F1' : 'transparent'}
+                                  strokeWidth={isActive ? 3 : 0}
+                                  fill="none"
+                                  markerEnd={isActive ? "url(#arrowhead-active)" : undefined}
+                                  className={`transition-all duration-300 ${isActive ? 'animate-flow' : ''}`}
+                                  style={{
+                                    strokeDasharray: '8, 8',
+                                    strokeLinecap: 'round',
+                                    opacity: isActive ? 1 : 0
+                                  }}
+                                />
+                              </g>
                             )
                           })
                         )}
@@ -719,13 +760,13 @@ function App() {
                               <circle
                                 cx={pos.x}
                                 cy={pos.y}
-                                r={isHovered ? 28 : 24}
-                                fill="white"
+                                r={isHovered ? 30 : 25}
+                                fill="url(#node-gradient)"
                                 stroke={getNodeColor(task.status)}
-                                strokeWidth={isSelected ? 4 : 3}
-                                className="transition-all duration-200"
+                                strokeWidth={isSelected ? 5 : 4}
+                                className="transition-all duration-300 ease-out"
                                 style={{
-                                  filter: isHovered ? 'drop-shadow(0 4px 12px rgba(0, 0, 0, 0.15))' : 'none'
+                                  filter: isHovered || isSelected ? 'url(#glow-effect) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2))' : 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))'
                                 }}
                               />
                               {/* Node Label */}
@@ -939,9 +980,10 @@ function App() {
               </div>
             </div>
           </div>
-        )}
-      </main>
-    </div>
+        )
+        }
+      </main >
+    </div >
   )
 }
 
