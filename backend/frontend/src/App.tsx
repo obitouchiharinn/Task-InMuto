@@ -20,7 +20,7 @@ function App() {
   // Form State
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [priority, setPriority] = useState<number>(3)
+  const [priority, setPriority] = useState<number>(0)
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
   const [dependencyTargetId, setDependencyTargetId] = useState<number | null>(null)
 
@@ -702,8 +702,8 @@ function App() {
                       <button
                         onClick={() => setGraphLayout('circular')}
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${graphLayout === 'circular'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-900'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
                         Circular
@@ -711,8 +711,8 @@ function App() {
                       <button
                         onClick={() => setGraphLayout('hierarchical')}
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${graphLayout === 'hierarchical'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-900'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
                         Tree
@@ -720,8 +720,8 @@ function App() {
                       <button
                         onClick={() => setGraphLayout('grid')}
                         className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${graphLayout === 'grid'
-                            ? 'bg-white text-gray-900 shadow-sm'
-                            : 'text-gray-500 hover:text-gray-900'
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-900'
                           }`}
                       >
                         Grid
