@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './index.css'
-import { api } from './api'
+import { api, ApiError } from './api'
 import type { Task, TaskStatus } from './api'
 
 type BusyState = 'idle' | 'loading' | 'saving'
@@ -27,7 +27,10 @@ function App() {
   const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [draggedNodeId, setDraggedNodeId] = useState<number | null>(null)
+
   const [nodePositions, setNodePositions] = useState<Record<number, { x: number; y: number }>>({})
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: number; title: string; blockers: string[] } | null>(null)
+  const [circularDependencyError, setCircularDependencyError] = useState<{ path: number[] } | null>(null)
 
   // Load tasks on mount
   useEffect(() => {
@@ -88,20 +91,32 @@ function App() {
       const updated = await api.updateTask(id, { status })
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
     } catch (err) {
-      setError((err as Error).message)
+      setError(`Failed to update task: ${(err as Error).message}. Refreshing...`)
+      // Creating a "Concurrent Updates" like feeling: if it fails, sync with server
+      await loadTasks()
+      setTimeout(() => setError(null), 5000)
     } finally {
       setBusy('idle')
     }
   }
 
   async function handleDeleteTask(id: number) {
-    const blockers = tasks.filter((t) => t.depends_on.includes(id)).map((t) => t.title)
-    const message =
-      blockers.length > 0
-        ? `This task is required by:\n- ${blockers.join('\n- ')}\nDelete anyway?`
-        : 'Delete this task?'
+    const task = tasks.find(t => t.id === id)
+    if (!task) return
 
-    if (!window.confirm(message)) return
+    const blockers = tasks.filter((t) => t.depends_on.includes(id)).map((t) => t.title)
+    setDeleteConfirmation({
+      id,
+      title: task.title,
+      blockers
+    })
+  }
+
+  async function executeDeleteTask() {
+    if (!deleteConfirmation) return
+
+    const { id } = deleteConfirmation
+    setDeleteConfirmation(null)
 
     try {
       setBusy('saving')
@@ -146,8 +161,12 @@ function App() {
       setTimeout(() => setSuccessMessage(null), 3000)
       setDependencyTargetId(null)
     } catch (err) {
-      setError((err as Error).message)
-      setTimeout(() => setError(null), 5000)
+      if (err instanceof ApiError && err.status === 400 && err.data?.path) {
+        setCircularDependencyError({ path: err.data.path })
+      } else {
+        setError((err as Error).message)
+        setTimeout(() => setError(null), 5000)
+      }
     } finally {
       setBusy('idle')
       setIsCheckingCycle(false)
@@ -196,7 +215,8 @@ function App() {
   const graphNodes = useMemo(() => {
     const positions: Record<number, { x: number; y: number }> = {}
     const ids = tasks.map((t) => t.id)
-    const radius = 220
+    // Dynamic radius: Base 220, expands slightly for more nodes, capped at 280 to fit view
+    const radius = Math.min(280, Math.max(220, 220 + (ids.length - 10) * 8))
     const centerX = 500
     const centerY = 300
     const angleStep = (2 * Math.PI) / Math.max(ids.length, 1)
@@ -968,8 +988,112 @@ function App() {
               </div>
             </div>
           </div>
-        )
-        }
+        )}
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmation && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm transition-opacity" onClick={() => setDeleteConfirmation(null)} />
+            <div className="relative bg-white rounded-xl shadow-xl border border-gray-100 max-w-md w-full p-6 animate-scale-in">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full">
+                  <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Delete Task?</h3>
+                  <p className="text-sm text-gray-500">This action cannot be undone.</p>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <p className="text-sm text-gray-700 font-medium mb-1">
+                  Are you sure you want to delete <span className="text-gray-900 font-bold">"{deleteConfirmation.title}"</span>?
+                </p>
+                {deleteConfirmation.blockers.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <div className="flex items-start gap-2">
+                      <svg className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <div>
+                        <p className="text-xs font-semibold text-amber-800 mb-1">Warning: Other tasks depend on this!</p>
+                        <ul className="text-xs text-amber-700 list-disc list-inside space-y-0.5">
+                          {deleteConfirmation.blockers.map((blocker, idx) => (
+                            <li key={idx} className="truncate">{blocker}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setDeleteConfirmation(null)}
+                  className="btn btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={executeDeleteTask}
+                  className="btn btn-danger"
+                >
+                  Delete Task
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Circular Dependency Modal */}
+        {circularDependencyError && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-gray-900/30 backdrop-blur-sm transition-opacity" onClick={() => setCircularDependencyError(null)} />
+            <div className="relative bg-white rounded-xl shadow-xl border border-gray-100 max-w-md w-full p-6 animate-scale-in">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center justify-center w-12 h-12 bg-red-100 rounded-full">
+                  <svg className="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Circular Dependency!</h3>
+                  <p className="text-sm text-gray-500">This link creates an infinite loop.</p>
+                </div>
+              </div>
+
+              <div className="bg-red-50 rounded-lg p-4 mb-6 border border-red-100">
+                <p className="text-sm text-red-800 font-medium mb-2">Cycle detected in path:</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {circularDependencyError.path.map((taskId, index) => (
+                    <div key={index} className="flex items-center">
+                      <span className="inline-flex items-center px-2 py-1 bg-white border border-red-200 text-red-700 text-xs font-mono font-bold rounded shadow-sm">
+                        #{taskId}
+                      </span>
+                      {index < circularDependencyError.path.length - 1 && (
+                        <svg className="w-4 h-4 text-red-400 mx-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end">
+                <button
+                  onClick={() => setCircularDependencyError(null)}
+                  className="btn btn-primary"
+                >
+                  Understood
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main >
     </div >
   )

@@ -12,6 +12,18 @@ export interface Task {
   priority: number
 }
 
+export class ApiError extends Error {
+  status: number
+  data: any
+
+  constructor(message: string, status: number, data: any) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.data = data
+  }
+}
+
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000/api'
 
@@ -27,7 +39,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const contentType = res.headers.get('content-type') || ''
     if (contentType.includes('application/json')) {
       const data = (await res.json().catch(() => ({}))) as { error?: string }
-      throw new Error(data.error || `Request failed with status ${res.status}`)
+      throw new ApiError(data.error || `Request failed with status ${res.status}`, res.status, data)
     }
     const text = await res.text().catch(() => '')
     throw new Error(text || `Request failed with status ${res.status}`)
