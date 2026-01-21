@@ -73,6 +73,8 @@ A robust task management application with dependency tracking, visual layouts, a
 ## Key Features
 
 - **Task Management**: Create, update, delete, and view tasks.
+- <img width="1120" height="900" alt="image" src="https://github.com/user-attachments/assets/07f08aef-b7b2-48fb-bd72-60baa16c9509" />
+
 - **Priority Levels**: Assign 1-5 stars to tasks.
 - **Dependency Graph**: Visualize task dependencies.
   - **Circular Layout**: Default, connects nodes in a ring.
