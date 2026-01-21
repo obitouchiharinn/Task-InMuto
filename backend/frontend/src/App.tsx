@@ -6,6 +6,7 @@ import type { Task, TaskStatus } from './api'
 
 type BusyState = 'idle' | 'loading' | 'saving'
 type Page = 'tasks' | 'dependencies'
+type GraphLayout = 'circular' | 'hierarchical' | 'grid'
 
 function App() {
   // State Management
@@ -29,6 +30,7 @@ function App() {
   const [draggedNodeId, setDraggedNodeId] = useState<number | null>(null)
 
   const [nodePositions, setNodePositions] = useState<Record<number, { x: number; y: number }>>({})
+  const [graphLayout, setGraphLayout] = useState<GraphLayout>('circular')
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: number; title: string; blockers: string[] } | null>(null)
   const [circularDependencyError, setCircularDependencyError] = useState<{ path: number[] } | null>(null)
 
@@ -215,27 +217,108 @@ function App() {
   const graphNodes = useMemo(() => {
     const positions: Record<number, { x: number; y: number }> = {}
     const ids = tasks.map((t) => t.id)
-    // Dynamic radius: Base 220, expands slightly for more nodes, capped at 280 to fit view
-    const radius = Math.min(280, Math.max(220, 220 + (ids.length - 10) * 8))
     const centerX = 500
     const centerY = 300
-    const angleStep = (2 * Math.PI) / Math.max(ids.length, 1)
 
-    ids.forEach((id, index) => {
-      // Use custom position if available, otherwise use circular layout
-      if (nodePositions[id]) {
-        positions[id] = nodePositions[id]
-      } else {
-        const angle = index * angleStep - Math.PI / 2
-        positions[id] = {
-          x: centerX + radius * Math.cos(angle),
-          y: centerY + radius * Math.sin(angle),
+    if (graphLayout === 'hierarchical') {
+      // Find levels (Topological Sort approximation / Level calculation)
+      const levels: Record<number, number> = {}
+      const visited = new Set<number>()
+
+      const getLevel = (id: number): number => {
+        if (id in levels) return levels[id]
+        if (visited.has(id)) return 0 // Cycle detected or processed
+        visited.add(id)
+
+        const task = tasks.find(t => t.id === id)
+        if (!task || task.depends_on.length === 0) {
+          levels[id] = 0
+          return 0
         }
+
+        const maxDepLevel = Math.max(...task.depends_on.map(getLevel))
+        levels[id] = maxDepLevel + 1
+        return levels[id]
       }
-    })
+
+      ids.forEach(getLevel)
+
+      // Group by level
+      const nodesByLevel: Record<number, number[]> = {}
+      Object.entries(levels).forEach(([id, level]) => {
+        if (!nodesByLevel[level]) nodesByLevel[level] = []
+        nodesByLevel[level].push(Number(id))
+      })
+
+      const maxLevel = Math.max(...Object.values(levels), 0)
+      const levelHeight = 500 / Math.max(maxLevel + 1, 1)
+
+      Object.entries(nodesByLevel).forEach(([levelStr, taskIds]) => {
+        const level = Number(levelStr)
+        const width = 800
+        const step = width / (taskIds.length + 1)
+        taskIds.forEach((id, idx) => {
+          if (nodePositions[id]) {
+            positions[id] = nodePositions[id]
+          } else {
+            positions[id] = {
+              x: 100 + step * (idx + 1),
+              y: 50 + level * levelHeight + (levelHeight / 2)
+            }
+          }
+        })
+      })
+
+      // Default position for unprocessed nodes (just in case)
+      ids.forEach(id => {
+        if (!positions[id]) {
+          if (nodePositions[id]) {
+            positions[id] = nodePositions[id]
+          } else {
+            positions[id] = { x: 500, y: 300 }
+          }
+        }
+      })
+
+    } else if (graphLayout === 'grid') {
+      const cols = Math.ceil(Math.sqrt(ids.length))
+      const spacingX = 800 / Math.max(cols, 1)
+      const spacingY = 500 / Math.max(Math.ceil(ids.length / cols), 1)
+
+      ids.forEach((id, index) => {
+        if (nodePositions[id]) {
+          positions[id] = nodePositions[id]
+        } else {
+          const col = index % cols
+          const row = Math.floor(index / cols)
+          positions[id] = {
+            x: 100 + col * spacingX + spacingX / 2,
+            y: 50 + row * spacingY + spacingY / 2
+          }
+        }
+      })
+
+    } else {
+      // Circular Layout (Default)
+      // Dynamic radius: Base 220, expands slightly for more nodes, capped at 280 to fit view
+      const radius = Math.min(280, Math.max(220, 220 + (ids.length - 10) * 8))
+      const angleStep = (2 * Math.PI) / Math.max(ids.length, 1)
+
+      ids.forEach((id, index) => {
+        if (nodePositions[id]) {
+          positions[id] = nodePositions[id]
+        } else {
+          const angle = index * angleStep - Math.PI / 2
+          positions[id] = {
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle),
+          }
+        }
+      })
+    }
 
     return positions
-  }, [tasks, nodePositions])
+  }, [tasks, nodePositions, graphLayout])
 
   // Filter tasks based on search query
   const filteredTasks = useMemo(() => {
@@ -605,13 +688,45 @@ function App() {
             <div className="lg:col-span-2">
               <div className="card">
                 <div className="p-6">
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg">
-                      <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                      </svg>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center w-10 h-10 bg-blue-100 rounded-lg">
+                        <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                      </div>
+                      <h2 className="text-lg font-semibold text-gray-900">Dependency Graph</h2>
                     </div>
-                    <h2 className="text-lg font-semibold text-gray-900">Dependency Graph</h2>
+                    {/* Graph Layout Selector */}
+                    <div className="flex bg-gray-100 p-1 rounded-lg">
+                      <button
+                        onClick={() => setGraphLayout('circular')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${graphLayout === 'circular'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-900'
+                          }`}
+                      >
+                        Circular
+                      </button>
+                      <button
+                        onClick={() => setGraphLayout('hierarchical')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${graphLayout === 'hierarchical'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-900'
+                          }`}
+                      >
+                        Tree
+                      </button>
+                      <button
+                        onClick={() => setGraphLayout('grid')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${graphLayout === 'grid'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-900'
+                          }`}
+                      >
+                        Grid
+                      </button>
+                    </div>
                   </div>
 
                   {/* Graph Container */}
