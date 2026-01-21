@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { FormEvent } from 'react'
 import './index.css'
 import { api } from './api'
 import type { Task, TaskStatus } from './api'
@@ -627,6 +628,14 @@ function App() {
                         const x = ((e.clientX - rect.left) / rect.width) * 1000
                         const y = ((e.clientY - rect.top) / rect.height) * 600
 
+                        if (draggedNodeId !== null) {
+                          setNodePositions((prev) => ({
+                            ...prev,
+                            [draggedNodeId]: { x, y }
+                          }))
+                          return
+                        }
+
                         // Find the closest node to the cursor (better UX than first-match)
                         let foundNode = null
                         let minDistance = 35 // Detection threshold
@@ -644,7 +653,11 @@ function App() {
                         }
                         setHoveredNodeId(foundNode)
                       }}
-                      onMouseLeave={() => setHoveredNodeId(null)}
+                      onMouseUp={() => setDraggedNodeId(null)}
+                      onMouseLeave={() => {
+                        setHoveredNodeId(null)
+                        setDraggedNodeId(null)
+                      }}
                     >
                       <defs>
                         <marker
@@ -694,6 +707,10 @@ function App() {
                             <g
                               key={task.id}
                               onClick={() => setSelectedTaskId(task.id)}
+                              onMouseDown={(e) => {
+                                e.stopPropagation()
+                                setDraggedNodeId(task.id)
+                              }}
                               onMouseEnter={() => setHoveredNodeId(task.id)}
                               onMouseLeave={() => setHoveredNodeId(null)}
                               className="cursor-pointer"
