@@ -9,6 +9,7 @@ export interface Task {
   updated_at: string
   depends_on: number[]
   dependents: number[]
+  priority: number
 }
 
 const API_BASE =
@@ -49,13 +50,13 @@ export const api = {
   listTasks() {
     return request<Task[]>('/tasks/')
   },
-  createTask(payload: { title: string; description?: string }) {
+  createTask(payload: { title: string; description?: string; priority?: number }) {
     return request<Task>('/tasks/', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
   },
-  updateTask(id: number, payload: Partial<Pick<Task, 'title' | 'description' | 'status'>>) {
+  updateTask(id: number, payload: Partial<Pick<Task, 'title' | 'description' | 'status' | 'priority'>>) {
     return request<Task>(`/tasks/${id}/`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
